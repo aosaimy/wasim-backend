@@ -1,0 +1,8 @@
+{
+    "admin": {
+        "password": "admin",
+        "projects": [
+            "testproject"
+        ]
+    }
+}
