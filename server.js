@@ -318,6 +318,10 @@ var dls = {
       var argv = r //.argv
       if (!/^[_0-9a-zA-Z]+$/.test(argv.project))
         return res.json({ ok: false, error: "project must be alphanumbers" })
+      
+      if (!/^[_\-0-9a-zA-Z][_\-.0-9a-zA-Z]+$/.test(argv.file))
+        return res.json({ ok: false, error: "filename format is not correct" })
+      
       if (md5(argv.project + config.salt) !== argv.hash) {
         return res.json({ ok: false, error: "project hash is not correct" })
       }
@@ -602,15 +606,23 @@ var dls = {
     }
   }
 };
-dls.init();
-process.on('SIGTERM', ()=> {
-  console.info('Got SIGTERM. Graceful shutdown start', new Date().toISOString())
-  // start graceul shutdown here
-  process.exit()
-})
-process.on('SIGINT', ()=> {
-  console.info('Got SIGINT from keyboard. Graceful shutdown start', new Date().toISOString())
-  fs.writeFileSync('./users.json',JSON.stringify(config.users,null,4),"utf8")
-  // start graceul shutdown here
-  process.exit()
-})
+if (require.main === module) { // called directly
+  dls.init();
+  process.on('SIGTERM', ()=> {
+    console.info('Got SIGTERM. Graceful shutdown start', new Date().toISOString())
+    // start graceul shutdown here
+    process.exit()
+  })
+  process.on('SIGINT', ()=> {
+    console.info('Got SIGINT from keyboard. Graceful shutdown start', new Date().toISOString())
+    fs.writeFileSync('./users.json',JSON.stringify(config.users,null,4),"utf8")
+    // start graceul shutdown here
+    process.exit()
+  })
+}
+else{
+  module.exports = {
+    server: dls,
+    config: config
+  }
+}
