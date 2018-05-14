@@ -79,12 +79,13 @@ var dls = {
       app.use("/", express.static(path.join(__dirname, 'public')));
       app.use(function(req, res, next) {
 
-        var allowedOrigins = [config.wasim_client_url, 'http://localhost','http://localhost:8101', 'http://a.localhost:8101', 'http://wasim.localhost', 'http://wasim-api.localhost', 'http://wasim.al-osaimy.com'];
+        // var allowedOrigins = [config.wasim_client_url, 'http://localhost','http://0.0.0.0:8101','http://localhost:8101', 'http://a.localhost:8101', 'http://wasim.localhost', 'http://wasim-api.localhost', 'http://wasim.al-osaimy.com'];
         var origin = req.headers.origin;
-        if (allowedOrigins.indexOf(origin) > -1) {
+        // if (allowedOrigins.indexOf(origin) > -1) {
           // Website you wish to allow to connect
-          res.setHeader('Access-Control-Allow-Origin', origin);
-        }
+          if(origin)
+            res.setHeader('Access-Control-Allow-Origin', origin);
+        // }
 
 
         // Request methods you wish to allow
@@ -154,6 +155,10 @@ var dls = {
           dls.projects[x].config.users = dls.projects[x].config.users || []
 
           dls.projects[x].config.users.forEach(u=>{
+            if(!config.users[u]){
+              console.log("WARNING: User not found "+u)
+              return 
+            }
             config.users[u].projects = config.users[u].projects || []
 
             if(config.users[u].projects.indexOf(x)==-1)
@@ -319,7 +324,7 @@ var dls = {
       if (!/^[_0-9a-zA-Z]+$/.test(argv.project))
         return res.json({ ok: false, error: "project must be alphanumbers" })
       
-      if (!/^[_\-0-9a-zA-Z][_\-.0-9a-zA-Z]+$/.test(argv.file))
+      if (!/^[_\-0-9a-zA-Z][_\-)( .0-9a-zA-Z]+$/.test(argv.file))
         return res.json({ ok: false, error: "filename format is not correct" })
       
       if (md5(argv.project + config.salt) !== argv.hash) {
@@ -414,6 +419,9 @@ var dls = {
       }
       if (!fs.existsSync(path.join(config.wasim, /*user,*/ argv.project, argv.pageid))) {
         return res.json({ ok: false, error: "file name does not exist" })
+      }
+      if (fs.existsSync(path.join(config.wasim, /*user,*/ argv.project,".done", argv.pageid))) {
+        fs.removeSync(path.join(config.wasim, /*user,*/ argv.project,".done", argv.pageid))
       }
       fs.remove(path.join(config.wasim, /*user,*/ argv.project, argv.pageid), (err) => {
         if (err) throw err;
@@ -524,9 +532,10 @@ var dls = {
         return res.json({ ok: false, error: "project name does not exist", default: config.defaultProjectConfig })
       }
       //delete
-      Object.keys(config.users).map(u=>config.users[u]).forEach(u=>config.users[u].projects= config.users[u].projects.filter(x=>x!=argv.project))
+      Object.keys(config.users).filter(u=>config.users[u] && config.users[u].projects).forEach(u=>config.users[u].projects= config.users[u].projects.filter(x=>x!=argv.project))
       //add
-      argv.config.users.filter(u=>config.users[u]).forEach(u=>config.users[u].projects.push(argv.project))
+      if(Array.isArray(argv.config.users))
+        argv.config.users.filter(u=>config.users[u]).forEach(u=>config.users[u].projects.push(argv.project))
 
       dls.projects[argv.project].config = argv.config
       fs.writeFileSync(path.join(config.wasim, /*user,*/ argv.project, ".config.json"), JSON.stringify(argv.config, null, 4), "utf8")

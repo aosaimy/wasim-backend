@@ -39,12 +39,13 @@ class MemLexicon {
     var that = this;
     glob(path.join(...this.path)+"/*", {nodir:true}, function(err, items) {
     // fs.readdir(path.join(...this.path), function(err, items) {
+      items = items.map(x=>path.basename(x))
       if (err)
         throw err;
       // read each file and parse it
       let counter = 0;
       // that.files = items.filter(f => f[0] != "."); //&& !/^qac/.test(f))
-      that.files = items.filter(f=>!that.excludeFiles.test(f))
+      that.files = that.excludeFiles  ? items.filter(f=>!that.excludeFiles.test(f)) : items
       var promises = that.files.map(f =>
         fs.readFileAsync(path.join(...that.path, f), "utf8")
         .then((file_content) => {
