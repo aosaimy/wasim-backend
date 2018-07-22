@@ -3,8 +3,8 @@ This file is the server that handle requests via browser. it can be run by: node
 params: none
 */
 "use strict";
-var json_comments = require('json-comments');
-// json_comments = json_comments; // Just to pypass JSHint
+var jsonComments = require('json-comments');
+// jsonComments = jsonComments; // Just to pypass JSHint
 require('source-map-support').install();
 // var async = require('async');
 var session = require('express-session');
@@ -149,8 +149,13 @@ var dls = {
       var items = fs.readdirSync(path.join(config.wasim))
       items.filter(e => e[0] != ".").forEach(x => {
         if (fs.existsSync(path.join(config.wasim, x, ".config.json"))) {
+          if(process.argv.indexOf("--skip") >=0){
+            dls.projects[x] = {}
+            console.log("Indexing Skipped for",x,"because of --skip option")
+            return
+          }
           dls.projects[x] = {
-            config: json_comments.parse(fs.readFileSync(path.join(config.wasim, x, ".config.json"), "utf8"))
+            config: jsonComments.parse(fs.readFileSync(path.join(config.wasim, x, ".config.json"), "utf8"))
           }
           dls.projects[x].config.users = dls.projects[x].config.users || []
 
@@ -166,9 +171,9 @@ var dls = {
           })
           // console.log(dls.projects[x].config)
           if (fs.existsSync(path.join(config.wasim, x, ".specialPos.json")))
-            dls.projects[x].specialPos = json_comments.parse(fs.readFileSync(path.join(config.wasim, x, ".specialPos.json"), "utf8"))
+            dls.projects[x].specialPos = jsonComments.parse(fs.readFileSync(path.join(config.wasim, x, ".specialPos.json"), "utf8"))
           if (fs.existsSync(path.join(config.wasim, x, ".specialSeg.json")))
-            dls.projects[x].specialSeg = json_comments.parse(fs.readFileSync(path.join(config.wasim, x, ".specialSeg.json"), "utf8"))
+            dls.projects[x].specialSeg = jsonComments.parse(fs.readFileSync(path.join(config.wasim, x, ".specialSeg.json"), "utf8"))
           if (dls.projects[x].config.askMemMA) {
             dls.projects[x].memMA = new MemLexicon([config.wasim, x, ".done"], dls.projects[x].config, x)
             dls.projects[x].memMA.init()
@@ -288,7 +293,9 @@ var dls = {
       if (!fs.existsSync(path.join(config.wasim, /*user,*/ argv.project))) {
         return res.json({ ok: false, error: "project name does not exist" })
       }
-      fs.removeSync(fs.existsSync(path.join(config.wasim, /*user,*/ argv.project)));
+      fs.removeSync(path.join(config.wasim, /*user,*/ argv.project));
+      if(dls.projects[argv.project])
+        delete dls.projects[argv.project]
       res.json({ ok: true, msg: "project has been successfuly deleted" })
     },
     conllu_list: function(request, res) {
@@ -430,9 +437,6 @@ var dls = {
         var git = require('simple-git')(path.join(config.wasim, /*user,*/ argv.project)).rm(path.join(config.wasim, /*user,*/ argv.project, argv.pageid)).commit("Automatic Remove from Wasim")
         if (config.remote_repo)
           git.push("origin", "master")
-
-
-
       });
     },
 
@@ -500,6 +504,11 @@ var dls = {
       var r = request.body;
       var argv = r //.argv
       // var result = {}
+      if (!/^[_0-9a-zA-Z]+$/.test(argv.project))
+        return res.json({ ok: false, error: "project must be alphanumbers" })
+      if (md5(argv.project + config.salt) !== argv.hash) {
+        return res.json({ ok: false, error: "project hash is not correct" })
+      }
       if (!dls.projects[argv.project])
         return res.send({ ok: false, error: "project name does not exist" })
 
@@ -509,17 +518,6 @@ var dls = {
         else
           return { ok: false, type: v }
       })
-      //   if (!fs.existsSync(path.join(config.wasim, /*user,*/ argv.project, "." + v + ".json"))) {
-      //     return { ok: false, error: "file name does not exist" }
-      //   }
-      //   r[v] = fs.readFileSync(path.join(config.wasim, /*user,*/ argv.project, "." + v + ".json"), "utf8")
-      //   try {
-      // return { ok: true, data: JSON.parse(r[v]), type: v }
-      //   } catch (e) {
-      //     console.error(path.join(config.wasim, /*user,*/ argv.project, "." + v + ".json", "is not proper JOSN formatted"))
-      //     return { ok: false, error: "Not proper JOSN formatted", type: v }
-      //   }
-      // })
       return res.send({ ok: true, guides: guides })
     },
     save_config: function(request, res) {
@@ -531,11 +529,12 @@ var dls = {
       if (!fs.existsSync(path.join(config.wasim, /*user,*/ argv.project))) {
         return res.json({ ok: false, error: "project name does not exist", default: config.defaultProjectConfig })
       }
-      //delete
-      Object.keys(config.users).filter(u=>config.users[u] && config.users[u].projects).forEach(u=>config.users[u].projects= config.users[u].projects.filter(x=>x!=argv.project))
-      //add
-      if(Array.isArray(argv.config.users))
+      if(Array.isArray(argv.config.users)){
+        //delete
+        Object.keys(config.users).filter(u=>config.users[u] && config.users[u].projects).forEach(u=>config.users[u].projects= config.users[u].projects.filter(x=>x!=argv.project))
+        //add
         argv.config.users.filter(u=>config.users[u]).forEach(u=>config.users[u].projects.push(argv.project))
+      }
 
       dls.projects[argv.project].config = argv.config
       fs.writeFileSync(path.join(config.wasim, /*user,*/ argv.project, ".config.json"), JSON.stringify(argv.config, null, 4), "utf8")
@@ -559,7 +558,7 @@ var dls = {
       }
       var c = fs.readFileSync(path.join(config.wasim, /*user,*/ argv.project, ".config.json"), "utf8")
       try {
-        return res.json({ ok: true, config: json_comments.parse(c) })
+        return res.json({ ok: true, config: jsonComments.parse(c) })
       } catch (e) {
         console.error(path.join(config.wasim, /*user,*/ argv.project, ".config.json", "is not proper JOSN formatted"))
         return res.json({ ok: false, error: "Not proper JOSN formatted", default: config.defaultProjectConfig })
