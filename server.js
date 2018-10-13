@@ -146,43 +146,7 @@ var dls = {
     },
     function() {
       //initMemMA
-      var items = fs.readdirSync(path.join(config.wasim))
-      items.filter(e => e[0] != ".").forEach(x => {
-        if (fs.existsSync(path.join(config.wasim, x, ".config.json"))) {
-          if(process.argv.indexOf("--skip") >=0){
-            dls.projects[x] = {}
-            console.log("Indexing Skipped for",x,"because of --skip option")
-            return
-          }
-          dls.projects[x] = {
-            config: jsonComments.parse(fs.readFileSync(path.join(config.wasim, x, ".config.json"), "utf8"))
-          }
-          dls.projects[x].config.users = dls.projects[x].config.users || []
-
-          dls.projects[x].config.users.forEach(u=>{
-            if(!config.users[u]){
-              console.log("WARNING: User not found "+u)
-              return 
-            }
-            config.users[u].projects = config.users[u].projects || []
-
-            if(config.users[u].projects.indexOf(x)==-1)
-              config.users[u].projects.push(x)
-          })
-          // console.log(dls.projects[x].config)
-          if (fs.existsSync(path.join(config.wasim, x, ".specialPos.json")))
-            dls.projects[x].specialPos = jsonComments.parse(fs.readFileSync(path.join(config.wasim, x, ".specialPos.json"), "utf8"))
-          if (fs.existsSync(path.join(config.wasim, x, ".specialSeg.json")))
-            dls.projects[x].specialSeg = jsonComments.parse(fs.readFileSync(path.join(config.wasim, x, ".specialSeg.json"), "utf8"))
-          if (dls.projects[x].config.askMemMA) {
-            dls.projects[x].memMA = new MemLexicon([config.wasim, x, ".done"], dls.projects[x].config, x)
-            dls.projects[x].memMA.init()
-          }
-        } else {
-          console.error("No Config File for this folder", x,". Ignoring.");
-        }
-      })
-      config.users.admin.projects = Object.keys(dls.projects)
+      dls.requestsGet.refresh()
     },
   ],
   requestsGet: {
@@ -205,12 +169,52 @@ var dls = {
       res.setHeader('content-type', 'text/conllu; charset=utf-8');
       return res.end(file)
     },
+    refresh: function(request, res) {
+      var items = fs.readdirSync(path.join(config.wasim))
+      items.filter(e => e[0] != ".").forEach(x => {
+        if (fs.existsSync(path.join(config.wasim, x, ".config.json"))) {
+          if(process.argv.indexOf("--skip") >=0){
+            dls.projects[x] = {}
+            console.log("Indexing Skipped for",x,"because of --skip option")
+            return
+          }
+          dls.projects[x] = {
+            config: jsonComments.parse(fs.readFileSync(path.join(config.wasim, x, ".config.json"), "utf8"))
+          }
+          dls.projects[x].config.users = dls.projects[x].config.users || []
+
+          dls.projects[x].config.users.forEach(u=>{
+            if(!config.users[u]){
+              console.log("WARNING: User not found "+u)
+              return 
+            }
+            // config.users[u].projects = config.users[u].projects || []
+
+            // if(config.users[u].projects.indexOf(x)==-1)
+              // config.users[u].projects.push(x)
+          })
+          // console.log(dls.projects[x].config)
+          if (fs.existsSync(path.join(config.wasim, x, ".specialPos.json")))
+            dls.projects[x].specialPos = jsonComments.parse(fs.readFileSync(path.join(config.wasim, x, ".specialPos.json"), "utf8"))
+          if (fs.existsSync(path.join(config.wasim, x, ".specialSeg.json")))
+            dls.projects[x].specialSeg = jsonComments.parse(fs.readFileSync(path.join(config.wasim, x, ".specialSeg.json"), "utf8"))
+          if (dls.projects[x].config.askMemMA) {
+            dls.projects[x].memMA = new MemLexicon([config.wasim, x, ".done"], dls.projects[x].config, x)
+            dls.projects[x].memMA.init()
+          }
+        } else {
+          console.error("No Config File for this folder", x,". Ignoring.");
+        }
+      })
+      // config.users.admin.projects = Object.keys(dls.projects)
+    },
   },
   requests: {
     users_login: function(request, res) {
       var r = request.body;
       var argv = r //.argv
       // console.log(argv.security)
+      config.users = require("./users")
       if (!config.users[argv.username])
         return res.json({ ok: false, error: "wrong username/password" })
 
@@ -249,11 +253,11 @@ var dls = {
     projects_list: function(request, res) {
       if (!request.session.username || md5(request.session.username) != request.session.username_hash )
         return res.json({ ok: false, error: "Not logged in" })
-      config.users[request.session.username].projects = config.users[request.session.username].projects || []
+      var projects = Object.keys(dls.projects).filter(p=>dls.projects[p].config.users.indexOf(request.session.username)>=0 || request.session.username == "admin")// || []
       return res.json({
         ok: true,
         username: request.session.username,
-        projects: config.users[request.session.username].projects.map(i => new Object({
+        projects: projects.map(i => new Object({
           project: i,
           hash: md5(i + config.salt)
         }))
@@ -381,6 +385,12 @@ var dls = {
       var argv = r //.argv
       if (!/^[_0-9a-zA-Z]+$/.test(argv.project))
         return res.json({ ok: false, error: "project must be alphanumbers" })
+
+      if (!/^[_\-0-9a-zA-Z][_\-)( .0-9a-zA-Z]+$/.test(argv.pageid))
+        return res.json({ ok: false, error: "filename format is not correct" })
+      if (argv.pageid == "NEWFILE")
+        return res.json({ ok: false, error: "filename should be changed" })
+
       if (md5(argv.project + config.salt) !== argv.hash) {
         return res.json({ ok: false, error: "project hash is not correct" })
       }
@@ -623,7 +633,7 @@ if (require.main === module) { // called directly
   })
   process.on('SIGINT', ()=> {
     console.info('Got SIGINT from keyboard. Graceful shutdown start', new Date().toISOString())
-    fs.writeFileSync('./users.json',JSON.stringify(config.users,null,4),"utf8")
+    // fs.writeFileSync('./users.json',JSON.stringify(config.users,null,4),"utf8")
     // start graceul shutdown here
     process.exit()
   })
