@@ -568,7 +568,7 @@ var dls = {
       }
       var c = fs.readFileSync(path.join(config.wasim, /*user,*/ argv.project, ".config.json"), "utf8")
       try {
-        return res.json({ ok: true, config: jsonComments.parse(c) })
+        return res.json({ ok: true, config: jsonComments.parse(c), default: config.defaultProjectConfig })
       } catch (e) {
         console.error(path.join(config.wasim, /*user,*/ argv.project, ".config.json", "is not proper JOSN formatted"))
         return res.json({ ok: false, error: "Not proper JOSN formatted", default: config.defaultProjectConfig })
