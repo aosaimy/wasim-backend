@@ -24,6 +24,7 @@ exports.post = function(request, res) {
     if (ress.statusCode != 200) {
       console.error("Status != 200",ress)
     }
+    ress.setEncoding('utf8');
     var xml = []
     ress.on('data', (chunk) => {
       xml.push(chunk)
